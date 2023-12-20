@@ -618,6 +618,7 @@ namespace WebUI {
             case -1:  // Scan in progress
                 break;
             default:
+                if(n > 16) n = 16; // Limit the number of listed APs
                 for (int i = 0; i < n; ++i) {
                     j.begin_object();
                     j.member("SSID", WiFi.SSID(i));
