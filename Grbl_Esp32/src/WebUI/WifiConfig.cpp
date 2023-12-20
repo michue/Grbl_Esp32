@@ -29,6 +29,7 @@
 #    include <SPIFFS.h>
 #    include <cstring>
 #    include "WifiServices.h"
+#    include "../mks/MKS_LVGL.h"
 
 namespace WebUI {
     WiFiConfig wifi_config;
@@ -211,9 +212,11 @@ namespace WebUI {
         switch (event) {
             case SYSTEM_EVENT_STA_GOT_IP:
                 grbl_sendf(CLIENT_ALL, "[MSG:Connected with %s]\r\n", WiFi.localIP().toString().c_str());
+                mks_grbl.wifi_connect_status = true;
                 break;
             case SYSTEM_EVENT_STA_DISCONNECTED:
                 grbl_send(CLIENT_ALL, "[MSG:Disconnected]\r\n");
+                mks_grbl.wifi_connect_status = false;
                 break;
             default:
                 break;
@@ -270,6 +273,32 @@ namespace WebUI {
         return status == WL_CONNECTED;
     }
 
+    bool WiFiConfig::mks_ConnectSTA2AP() {
+        uint8_t     count  = 0;
+        wl_status_t status = WiFi.status();
+        while (status != WL_CONNECTED && count < 40) {
+            switch (status) {
+                case WL_NO_SSID_AVAIL:
+                    return status == WL_CONNECTED;
+                break;
+                case WL_CONNECT_FAILED:
+
+                break;
+                case WL_CONNECTED:
+
+                break;
+                default:
+
+                break;
+            }
+            // COMMANDS::wait(500);
+            delay(500);
+            count++;
+            status = WiFi.status();
+        }
+        return status == WL_CONNECTED;
+    }
+
     /*
      * Start client mode (Station)
      */
@@ -308,7 +337,48 @@ namespace WebUI {
         if (WiFi.begin(SSID.c_str(), (password.length() > 0) ? password.c_str() : NULL)) {
             grbl_send(CLIENT_ALL, "\n[MSG:Client Started]\r\n");
             grbl_sendf(CLIENT_ALL, "[MSG:Connecting %s]\r\n", SSID.c_str());
+            memset(mks_wifi.wifi_name_connect, 0, sizeof(mks_wifi.wifi_name_connect));
+            memcpy(mks_wifi.wifi_name_connect, SSID.c_str(), sizeof(mks_wifi.wifi_name_connect));
             return ConnectSTA2AP();
+        } else {
+            grbl_send(CLIENT_ALL, "[MSG:Starting client failed]\r\n");
+            return false;
+        }
+    }
+
+    bool WiFiConfig::mks_StartSTA() {
+        //stop active service
+        wifi_services.end();
+        //Sanity check
+        if ((WiFi.getMode() == WIFI_STA) || (WiFi.getMode() == WIFI_AP_STA)) {
+            WiFi.disconnect();
+        }
+        if ((WiFi.getMode() == WIFI_AP) || (WiFi.getMode() == WIFI_AP_STA)) {
+            WiFi.softAPdisconnect();
+        }
+        WiFi.enableAP(false);
+        WiFi.mode(WIFI_STA);
+        //Get parameters for STA
+        String h = wifi_hostname->get();
+        WiFi.setHostname(h.c_str());
+        //SSID
+        String SSID = wifi_sta_ssid->get();
+        if (SSID.length() == 0) {
+            SSID = DEFAULT_STA_SSID;
+        }
+        //password
+        String  password = wifi_sta_password->get();
+        int8_t  IP_mode  = wifi_sta_mode->get();
+        int32_t IP       = wifi_sta_ip->get();
+        int32_t GW       = wifi_sta_gateway->get();
+        int32_t MK       = wifi_sta_netmask->get();
+        //if not DHCP
+        if (IP_mode != DHCP_MODE) {
+            IPAddress ip(IP), mask(MK), gateway(GW);
+            WiFi.config(ip, gateway, mask);
+        }
+        if (WiFi.begin(SSID.c_str(), (password.length() > 0) ? password.c_str() : NULL)) {
+            return mks_ConnectSTA2AP();
         } else {
             grbl_send(CLIENT_ALL, "[MSG:Starting client failed]\r\n");
             return false;
@@ -380,6 +450,38 @@ namespace WebUI {
         grbl_send(CLIENT_ALL, "\n[MSG:WiFi Off]\r\n");
     }
 
+    void WiFiConfig::mks_begin() {
+        //stop active services
+        wifi_services.end();
+
+        //setup events
+        if (!_events_registered) {
+            //cumulative function and no remove so only do once
+            WiFi.onEvent(WiFiConfig::WiFiEvent);
+            _events_registered = true;
+        }
+
+        _hostname       = wifi_hostname->get();
+        int8_t wifiMode = wifi_radio_mode->get();
+
+        if (wifiMode == ESP_WIFI_AP) {
+            StartAP();
+            //start services
+            wifi_services.begin();
+        } else if (wifiMode == ESP_WIFI_STA) {
+            if (!mks_StartSTA()) {
+                #if defined(USE_WIFI)
+                    mks_wifi.wifi_scanf_status = wifi_scanf_fail;
+                #endif
+                StartAP();
+            }
+            //start services
+            wifi_services.begin();
+        } else {
+            WiFi.mode(WIFI_OFF);
+        }
+    }
+
     /**
      * begin WiFi setup
      */
@@ -402,6 +504,9 @@ namespace WebUI {
         } else if (wifiMode == ESP_WIFI_STA) {
             if (!StartSTA()) {
                 grbl_sendf(CLIENT_ALL, "[MSG:Cannot connect to %s]\r\n", wifi_sta_ssid->get());
+                #if defined(USE_WIFI)
+                    mks_wifi.wifi_scanf_status = wifi_scanf_fail;
+                #endif
                 StartAP();
             }
             //start services

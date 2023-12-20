@@ -107,6 +107,10 @@ namespace WebUI {
         static void        reset_settings();
         static bool        Is_WiFi_on();
 
+        static void        mks_begin();
+        static bool        mks_StartSTA();
+        static bool        mks_ConnectSTA2AP();
+
         ~WiFiConfig();
 
     private:
