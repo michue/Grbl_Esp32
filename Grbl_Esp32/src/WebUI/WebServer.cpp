@@ -1463,7 +1463,7 @@ namespace WebUI {
                             if (!sdUploadFile) {
                                 //if creation failed
                                 _upload_status = UploadStatusType::FAILED;
-                                grbl_send(CLIENT_ALL, "[MSG:Upload failed]\r\n");
+                                grbl_send(CLIENT_ALL, "[MSG:Upload failed:1]\r\n");
                                 pushError(ESP_ERROR_FILE_CREATION, "File creation failed");
                             }
                             //if creation succeed set flag UploadStatusType::ONGOING
@@ -1480,12 +1480,12 @@ namespace WebUI {
                         //no error write post data
                         if (upload.currentSize != sdUploadFile.write(upload.buf, upload.currentSize)) {
                             _upload_status = UploadStatusType::FAILED;
-                            grbl_send(CLIENT_ALL, "[MSG:Upload failed]\r\n");
+                            grbl_send(CLIENT_ALL, "[MSG:Upload failed:2]\r\n");
                             pushError(ESP_ERROR_FILE_WRITE, "File write failed");
                         }
                     } else {  //if error set flag UploadStatusType::FAILED
                         _upload_status = UploadStatusType::FAILED;
-                        grbl_send(CLIENT_ALL, "[MSG:Upload failed]\r\n");
+                        grbl_send(CLIENT_ALL, "[MSG:Upload failed:3]\r\n");
                         pushError(ESP_ERROR_FILE_WRITE, "File write failed");
                     }
                     //Upload end
@@ -1504,12 +1504,12 @@ namespace WebUI {
                             if (_webserver->arg(sizeargname) != String(filesize)) {
                                 _upload_status = UploadStatusType::FAILED;
                                 pushError(ESP_ERROR_UPLOAD, "File upload mismatch");
-                                grbl_send(CLIENT_ALL, "[MSG:Upload failed]\r\n");
+                                grbl_send(CLIENT_ALL, "[MSG:Upload failed:4]\r\n");
                             }
                         }
                     } else {
                         _upload_status = UploadStatusType::FAILED;
-                        grbl_send(CLIENT_ALL, "[MSG:Upload failed]\r\n");
+                        grbl_send(CLIENT_ALL, "[MSG:Upload failed:5]\r\n");
                         pushError(ESP_ERROR_FILE_CLOSE, "File close failed");
                     }
                     if (_upload_status == UploadStatusType::ONGOING) {
@@ -1523,7 +1523,7 @@ namespace WebUI {
                 } else {  //Upload cancelled
                     _upload_status = UploadStatusType::FAILED;
                     set_sd_state(SDState::Idle);
-                    grbl_send(CLIENT_ALL, "[MSG:Upload failed]\r\n");
+                    grbl_send(CLIENT_ALL, "[MSG:Upload failed:6]\r\n");
                     if (sdUploadFile) {
                         sdUploadFile.close();
                     }
