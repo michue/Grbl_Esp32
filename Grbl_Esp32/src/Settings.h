@@ -320,6 +320,7 @@ public:
     void        setDefault();
     void        addWebui(WebUI::JSONencoder*);
     Error       setStringValue(char* value);
+    Error       mks_setStringValue(char* s);
     const char* getStringValue();
     const char* getDefaultString();
 

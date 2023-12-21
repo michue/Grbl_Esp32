@@ -434,6 +434,26 @@ Error StringSetting::setStringValue(char* s) {
     return Error::Ok;
 }
 
+Error StringSetting::mks_setStringValue(char* s) {
+    if (_minLength && _maxLength && (strlen(s) < _minLength || strlen(s) > _maxLength)) {
+        return Error::BadNumberFormat;
+    }
+    _currentValue = s;
+    if (_storedValue != _currentValue) {
+        if (_currentValue == _defaultValue) {
+            nvs_erase_key(_handle, _keyName);
+            _storedValue = _defaultValue;
+        } else {
+            if (nvs_set_str(_handle, _keyName, _currentValue.c_str())) {
+                return Error::NvsSetFailed;
+            }
+            _storedValue = _currentValue;
+        }
+    }
+    check(NULL);
+    return Error::Ok;
+}
+
 static bool isPassword(bool (*_checker)(char*)) {
 #ifdef ENABLE_WIFI
     if (_checker == (bool (*)(char*))WebUI::WiFiConfig::isPasswordValid) {
