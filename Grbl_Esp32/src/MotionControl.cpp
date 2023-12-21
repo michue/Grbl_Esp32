@@ -292,15 +292,15 @@ static bool axis_is_squared(uint8_t axis_mask) {
 void mc_homing_cycle(uint8_t cycle_mask) {
     bool no_cycles_defined = true;
 
-    // if (user_defined_homing(cycle_mask)) {
-    //     return;
-    // }
+    if (user_defined_homing(cycle_mask)) {
+        return;
+    }
 
     // This give kinematics a chance to do something before normal homing
     // if it returns true, the homing is canceled.
-    // if (kinematics_pre_homing(cycle_mask)) {
-    //     return;
-    // }
+    if (kinematics_pre_homing(cycle_mask)) {
+        return;
+    }
     // Check and abort homing cycle, if hard limits are already enabled. Helps prevent problems
     // with machines with limits wired on both ends of travel to one limit pin.
     // TODO: Move the pin-specific LIMIT_PIN call to Limits.cpp as a function.
@@ -371,7 +371,7 @@ void mc_homing_cycle(uint8_t cycle_mask) {
     gc_sync_position();
     plan_sync_position();
     // This give kinematics a chance to do something after normal homing
-    // kinematics_post_homing();
+    kinematics_post_homing();
     // If hard limits feature enabled, re-enable hard limits pin change register after homing cycle.
     limits_init();
 }
