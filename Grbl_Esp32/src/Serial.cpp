@@ -121,7 +121,7 @@ void client_init() {
                             "clientCheckTask",  // name for task
                             8192,               // size of task stack
                             NULL,               // parameters
-                            1,                  // priority
+                            3,                  // priority
                             &clientCheckTaskHandle,
                             SUPPORT_TASK_CORE  // must run the task on same core
                                                // core
@@ -178,6 +178,7 @@ void clientCheckTask(void* pvParameters) {
             // not passed into the main buffer, but these set system state flag bits for realtime execution.
             if (is_realtime_command(data)) {
                 execute_realtime_command(static_cast<Cmd>(data), client);
+                vTaskDelay(1 / portTICK_RATE_MS);  // Yield to other tasks
             } else {
 #if defined(ENABLE_SD_CARD)
                 if (get_sd_state(false) < SDState::Busy) {
@@ -190,6 +191,9 @@ void clientCheckTask(void* pvParameters) {
                     if (data == '\r' || data == '\n') {
                         grbl_sendf(client, "error %d\r\n", Error::AnotherInterfaceBusy);
                         grbl_msg_sendf(client, MsgLevel::Info, "SD card job running");
+                        if(sys.state == State::Idle) {
+                            set_sd_state(SDState::Idle);
+                        }
                     }
                 }
 #endif  //ENABLE_SD_CARD
