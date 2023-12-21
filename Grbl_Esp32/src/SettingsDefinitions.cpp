@@ -4,6 +4,10 @@ FlagSetting* verbose_errors;
 
 FakeSetting<int>* number_axis;
 
+IntSetting* language_select;
+
+FlagSetting* beep_status;
+
 StringSetting* startup_line_0;
 StringSetting* startup_line_1;
 StringSetting* build_info;
@@ -334,6 +338,10 @@ void make_settings() {
         setting->setAxis(axis);
         axis_settings[axis]->steps_per_mm = setting;
     }
+
+    language_select              = new IntSetting(GRBL, WG, "40", "Language", DEFAULT_LANGUAGE_STATUS, 0, 2);
+
+    beep_status                  = new FlagSetting(GRBL, WG, "38", "beep_status", DEFAULT_BEEP_STATUS);
 
     // Spindle Settings
     spindle_type =

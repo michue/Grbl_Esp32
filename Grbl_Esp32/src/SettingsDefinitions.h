@@ -4,6 +4,10 @@ extern FlagSetting* verbose_errors;
 
 extern FakeSetting<int>* number_axis;
 
+extern IntSetting* language_select;
+
+extern FlagSetting* beep_status;
+
 extern AxisSettings* x_axis_settings;
 extern AxisSettings* y_axis_settings;
 extern AxisSettings* z_axis_settings;
