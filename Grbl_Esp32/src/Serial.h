@@ -52,3 +52,6 @@ uint8_t client_get_rx_buffer_available(uint8_t client);
 
 void execute_realtime_command(Cmd command, uint8_t client);
 bool is_realtime_command(uint8_t data);
+
+void serila_write_into_buffer(uint8_t *data);
+void serial_web_input_into_buffer(uint8_t *data);
