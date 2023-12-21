@@ -19,6 +19,7 @@
 */
 
 #include "Config.h"
+#include "mks/MKS_LVGL.h"
 #ifdef ENABLE_SD_CARD
 #    include "SDCard.h"
 
@@ -28,6 +29,15 @@ uint8_t                    SD_client     = CLIENT_SERIAL;
 WebUI::AuthenticationLevel SD_auth_level = WebUI::AuthenticationLevel::LEVEL_GUEST;
 uint32_t                   sd_current_line_number;     // stores the most recent line number read from the SD
 static char                comment[LINE_BUFFER_SIZE];  // Line to be executed. Zero-terminated.
+
+#define USE_HSPI_FOR_SD 1
+#ifdef USE_HSPI_FOR_SD
+SPIClass SPI_H(HSPI);
+#define SD_SPI SPI_H
+#else
+#define SD_SPI SPI
+#endif
+
 
 // attempt to mount the SD card
 /*bool sd_mount()
@@ -39,6 +49,30 @@ static char                comment[LINE_BUFFER_SIZE];  // Line to be executed. Z
   return true;
 }*/
 
+bool filename_check(char *str, uint16_t num) {
+
+    char *p, *j, *k;
+
+    if(num > 128) return false;
+    // if(((str[num-1]=='c')||(str[num-1]='C')) && ((str[num-2] == 'n')||(str[num-2] == 'N'))) return true;  // .nc
+
+    p = strstr(str, ".nc");
+    if(p == NULL) p = strstr(str, ".NC");
+    else return true;
+
+    j = strstr(str, ".gcode");
+    if(j == NULL) j = strstr(str, ".GCODE");
+    else return true;
+
+    k = strstr(str, ".gc");
+    if(k == NULL) k = strstr(str, ".GC");
+    else return true;
+
+    if((p!=NULL) || (j!=NULL) || (k!=NULL)) return true;
+    else return false;
+}
+
+char filename_check_str[255];
 void listDir(fs::FS& fs, const char* dirname, uint8_t levels, uint8_t client) {
     //char temp_filename[128]; // to help filter by extension	TODO: 128 needs a definition based on something
     File root = fs.open(dirname);
@@ -57,9 +91,51 @@ void listDir(fs::FS& fs, const char* dirname, uint8_t levels, uint8_t client) {
                 listDir(fs, file.name(), levels - 1, client);
             }
         } else {
-            grbl_sendf(CLIENT_ALL, "[FILE:%s|SIZE:%d]\r\n", file.name(), file.size());
+            memset(filename_check_str, 0, sizeof(filename_check_str));
+            strcpy(filename_check_str, file.name());
+            if(filename_check(filename_check_str, strlen(filename_check_str)) == true) {
+                grbl_sendf(CLIENT_ALL, "[FILE:%s|SIZE:%d]\r\n", file.name(), file.size());
+                // grbl_send(CLIENT_ALL, "check\n");
+            }
         }
         file = root.openNextFile();
+    }
+}
+
+char mks_filename_check_str[255];
+void mks_listDir(fs::FS& fs, const char* dirname, uint8_t levels) {
+    File root = fs.open(dirname);
+    if(!root) {
+
+        return;
+    }
+    if (!root.isDirectory()) {
+
+        return;
+    }
+    File file = root.openNextFile();
+    while(file) {
+        if (file.isDirectory()) {
+            if (levels) {
+                mks_listDir(fs, file.name(), levels - 1);
+            }
+        } else {
+            memcpy(mks_filename_check_str, file.name(), 255);
+            strcpy(mks_filename_check_str, file.name());
+            if(filename_check(mks_filename_check_str, strlen(mks_filename_check_str)) == true) {
+                if((mks_file_list.file_count >= ((mks_file_list.file_page * MKS_FILE_NUM)-(MKS_FILE_NUM)))
+                    && (mks_file_list.file_count < (mks_file_list.file_page * MKS_FILE_NUM))) {
+                    memset(mks_file_list.filename_str[mks_file_list.file_begin_num], 0, sizeof(mks_file_list.filename_str[mks_file_list.file_begin_num]));
+                    strcpy(mks_file_list.filename_str[mks_file_list.file_begin_num], mks_filename_check_str);
+                    mks_file_list.file_size[mks_file_list.file_begin_num] = file.size();
+                    draw_filexx(mks_file_list.file_begin_num, mks_file_list.filename_str[mks_file_list.file_begin_num]);
+                    mks_file_list.file_begin_num++;
+                }
+                mks_file_list.file_count++;
+                if(mks_file_list.file_count >= (mks_file_list.file_page * MKS_FILE_NUM)) return;
+            }
+        }
+        file =  root.openNextFile();
     }
 }
 
@@ -85,6 +161,15 @@ boolean closeFile() {
     myFile.close();
     SD.end();
     return true;
+}
+
+boolean setFilePos(uint32_t pos) {
+    if (!myFile) {
+        return false;
+    }
+
+    sd_current_line_number = 0;
+    myFile.seek(pos);
 }
 
 /*
@@ -151,7 +236,7 @@ SDState get_sd_state(bool refresh) {
     sd_state = SDState::NotPresent;
     //using default value for speed ? should be parameter
     //refresh content if card was removed
-    if (SD.begin((GRBL_SPI_SS == -1) ? SS : GRBL_SPI_SS, SPI, GRBL_SPI_FREQ, "/sd", 2)) {
+    if (SD.begin((GRBL_SPI_SS == -1) ? SS : GRBL_SPI_SS, SD_SPI, GRBL_SPI_FREQ, "/sd", 2)) {
         if (SD.cardSize() > 0) {
             sd_state = SDState::Idle;
         }
