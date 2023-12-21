@@ -26,6 +26,7 @@
 */
 
 #include "Grbl.h"
+#include "mks/MKS_draw_lvgl.h"
 
 uint8_t n_homing_locate_cycle = NHomingLocateCycle;
 
@@ -420,7 +421,7 @@ bool __attribute__((weak)) user_defined_homing(uint8_t cycle_mask) {
 void limitsCheckSoft(float* target) {
     if (soft_limits->get()) {
         // NOTE: Block jog state. Jogging is a special case and soft limits are handled independently.
-        if (sys.state != State::Jog && sys.state != State::Homing) {
+        if (sys.state != State::Jog && sys.state != State::Homing && mks_ui_page.mks_ui_page != MKS_UI_Pring) {
             limits_soft_check(target);
         }
     }
