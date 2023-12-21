@@ -354,7 +354,6 @@ void make_settings() {
     spindle_pwm_off_value = new FloatSetting(
         EXTENDED, WG, "34", "Spindle/PWM/Off", DEFAULT_SPINDLE_OFF_VALUE, 0.0, 100.0, checkSpindleChange);  // these are percentages
     // IntSetting spindle_pwm_bit_precision(EXTENDED, WG, "Spindle/PWM/Precision", DEFAULT_SPINDLE_BIT_PRECISION, 1, 16);
-    spindle_pwm_freq = new FloatSetting(EXTENDED, WG, "33", "Spindle/PWM/Frequency", DEFAULT_SPINDLE_FREQ, 0, 100000, checkSpindleChange);
     spindle_output_invert = new FlagSetting(GRBL, WG, NULL, "Spindle/PWM/Invert", DEFAULT_INVERT_SPINDLE_OUTPUT_PIN, checkSpindleChange);
 
     spindle_delay_spinup =
@@ -379,6 +378,8 @@ void make_settings() {
     // TODO Settings - also need to call my_spindle->init();
     rpm_min = new FloatSetting(GRBL, WG, "31", "GCode/MinS", DEFAULT_SPINDLE_RPM_MIN, 0, 100000, checkSpindleChange);
     rpm_max = new FloatSetting(GRBL, WG, "30", "GCode/MaxS", DEFAULT_SPINDLE_RPM_MAX, 0, 100000, checkSpindleChange);
+
+    spindle_pwm_freq    = new FloatSetting(GRBL, WG, "28", "Spindle/PWM/Frequency", DEFAULT_SPINDLE_FREQ, 0, 100000, checkSpindleChange);
 
     homing_pulloff      = new FloatSetting(GRBL, WG, "27", "Homing/Pulloff", DEFAULT_HOMING_PULLOFF, 0, 1000);
     homing_debounce     = new FloatSetting(GRBL, WG, "26", "Homing/Debounce", DEFAULT_HOMING_DEBOUNCE_DELAY, 0, 10000);
