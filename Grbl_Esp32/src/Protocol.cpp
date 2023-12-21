@@ -23,6 +23,10 @@
 */
 
 #include "Grbl.h"
+#include "mks/MKS_TS35.h"
+#include "lvgl.h"
+#include "mks/MKS_draw_print.h"
+#include "mks/MKS_draw_wifi.h"
 
 static void protocol_exec_rt_suspend();
 
@@ -103,6 +107,10 @@ bool can_park() {
   GRBL PRIMARY LOOP:
 */
 void protocol_main_loop() {
+
+    static bool first_restart = true;
+    uint16_t re_cmd[] = {0x18}; // 复位命令
+
     client_reset_read_buffer(CLIENT_ALL);
     empty_lines();
     //uint8_t client = CLIENT_SERIAL; // default client
@@ -135,7 +143,16 @@ void protocol_main_loop() {
     // Primary loop! Upon a system abort, this exits back to main() to reset the system.
     // This is also where Grbl idles while waiting for something to do.
     // ---------------------------------------------------------------------------------
+    MKS_GRBL_CMD_SEND("$x\n");   // 主动解锁
+
+    if(first_restart == true) {
+      MKS_GRBL_CMD_SEND(re_cmd);
+      first_restart = false;
+    }
+
     int c;
+    bool is_need_next = false;
+
     for (;;) {
 #ifdef ENABLE_SD_CARD
         if (SD_ready_next) {
@@ -144,10 +161,29 @@ void protocol_main_loop() {
                 SD_ready_next = false;
                 report_status_message(execute_line(fileLine, SD_client, SD_auth_level), SD_client);
             } else {
-                char temp[50];
-                sd_get_current_filename(temp);
-                grbl_notifyf("SD print done", "%s print is successful", temp);
-                closeFile();  // close file and clear SD ready/running flags
+
+                if(mks_grbl.carve_times > 0) mks_grbl.carve_times--;
+                if(mks_grbl.carve_times > 0) {
+                    setFilePos(0);
+                    // grbl_sendf(CLIENT_SERIAL , "times:%d\n", mks_grbl.carve_times);
+                }else {
+                    char temp[50];
+                    sd_get_current_filename(temp);
+#ifdef USR_LCD_CTRL
+                    if (mks_grbl.is_mks_ts35_flag == true) {
+                        mks_ui_page.mks_ui_page = MKS_UI_PAGE_LOADING;
+                        mks_ui_page.wait_count = DEFAULT_UI_COUNT;
+                        mks_draw_finsh_pupop(); // show print finsh
+                    }
+#endif
+                    grbl_notifyf("SD print done", "%s print is successful", temp);
+                    MKS_GRBL_CMD_SEND("G0 X0 Y0 F300\n");                               // 回到原点
+                    sys_rt_f_override                    = FeedOverride::Default;
+                    sys_rt_r_override                    = RapidOverride::Default;
+                    sys_rt_s_override                    = SpindleSpeedOverride::Default;
+                    closeFile();  // close file and clear SD ready/running flags
+                    grbl_send(CLIENT_ALL, "SD Print Finish!\n");
+                }
             }
         }
 #endif
@@ -194,9 +230,19 @@ void protocol_main_loop() {
         }
         // check to see if we should disable the stepper drivers ... esp32 work around for disable in main loop.
         if (stepper_idle && stepper_idle_lock_time->get() != 0xff) {
-            if (esp_timer_get_time() > stepper_idle_counter) {
-                motors_set_disable(true);
+            if((sys.state != State::Cycle) || (sys.state != State::Hold)) {
+                if (esp_timer_get_time() > stepper_idle_counter) {
+                    motors_set_disable(true);
+                }
             }
+        }
+
+        spindle_check();
+
+        if(mks_ui_page.mks_ui_page == MKS_UI_Wifi) {
+            #if defined(USE_WIFI)
+                mks_wifi_connect(wifi_send_username, wifi_send_password);   // 扫描wifi是否需要被发送指令连接
+            #endif
         }
     }
     return; /* Never reached */

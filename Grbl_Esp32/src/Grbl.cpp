@@ -21,7 +21,22 @@
 #include "Grbl.h"
 #include <WiFi.h>
 
+#include "mks/MKS_TS35.h"
+#include "mks/MKS_LVGL.h"
+#include "mks/MKS_draw_ready.h"
+#include "mks/MKS_ctrl.h"
+#include "mks/MKS_SDCard.h"
+
 void grbl_init() {
+
+    disableCore0WDT();
+    disableCore1WDT();
+    disableLoopWDT();
+
+    pinMode(LCD_EN, OUTPUT);
+
+    LCD_BLK_OFF;
+
 #ifdef USE_I2S_OUT
     i2s_out_init();  // The I2S out must be initialized before it can access the expanded GPIO port
 #endif
@@ -65,7 +80,7 @@ void grbl_init() {
 #endif
     Spindles::Spindle::select();
 #ifdef ENABLE_WIFI
-    WebUI::wifi_config.begin();
+    // WebUI::wifi_config.begin();
 #endif
 #ifdef ENABLE_BLUETOOTH
     WebUI::bt_config.begin();
@@ -73,8 +88,45 @@ void grbl_init() {
     WebUI::inputBuffer.begin();
 }
 
+void _mc_task_init(void) {
+
+#ifdef USR_LCD_CTRL
+    mks_grbl_parg_init();
+    ts35_beep_init();
+    bsp_led_init();
+    tft_TS35_init();
+    test_cfg_find_init();
+    disp_task_init();
+#endif
+    test_cfg_find_init();
+}
+
+void phy_init_reinit(void) {
+    coolant_init();
+    limits_init();
+}
+
+/*
+ * 当触发0x18这个指令的时候，应该需要来到这个位置
+ * 这个函数将会初始化整个GRBL的各个参数，包括：
+ * 1、初始化sys这个结构体，
+ * 2、初始化状态----ALARM\IDLE....
+ * 3、初始化probe的状态
+ * 4、初始化全局状态标致Flag
+ * 5、恢复sys_rt_xxxx为默认值
+ * 6、停止循环执行gcode
+ * 7、清空Client Buff
+ * 8、初始化gcode解析器
+ * 9、停止输出
+ * 10、复位planner
+ * 11、复位stepper
+ * 12、planner同步坐标
+ * 13、stepper同步坐标
+*/
 static void reset_variables() {
     // Reset system variables.
+    static bool lcd_init_status = false;
+
     State prior_state = sys.state;
     memset(&sys, 0, sizeof(system_t));  // Clear system struct variable.
     sys.state             = prior_state;
@@ -96,9 +148,27 @@ static void reset_variables() {
     client_reset_read_buffer(CLIENT_ALL);
     gc_init();  // Set g-code parser to default state
     spindle->stop();
-    coolant_init();
-    limits_init();
-    probe_init();
+
+#ifdef USR_LCD_CTRL
+    if(mks_grbl.is_test_mode != true) {
+        coolant_init();
+        limits_init();
+        mks_probe_init();
+    }else if(mks_grbl.is_test_mode == true) {
+        pin_init();
+        mks_probe_check_disable();
+    }
+#else
+    if(mks_grbl.is_test_mode == false) {
+        probe_init();
+        coolant_init();
+        limits_init();
+    }else if(mks_grbl.is_test_mode == true) {
+        pin_init();
+        test_task_init();
+    }
+#endif
+
     plan_reset();  // Clear block buffer and planner variables
     st_reset();    // Clear stepper subsystem variables
     // Sync cleared gcode and planner positions to current system position.
@@ -109,6 +179,25 @@ static void reset_variables() {
     // used to keep track of a jog command sent to mc_line() so we can cancel it.
     // this is needed if a jogCancel comes along after we have already parsed a jog and it is in-flight.
     sys_pl_data_inflight = NULL;
+
+     /*LCD---GUI*/
+#ifdef USR_LCD_CTRL
+    if(!lcd_init_status) {
+        lcd_init_status = true;
+
+        /* SD cfg updata */
+        if(mks_grbl.is_test_mode != true) {
+            mks_updata_init();
+        }else {
+            mks_updata.updata_flag = UD_NONE;
+        }
+
+        if(mks_updata.updata_flag == UD_NO_FILE) {
+            WebUI::wifi_config.mks_begin();
+        }
+    }
+#endif
+    spindle_check_init();
 }
 
 void run_once() {

@@ -22,6 +22,7 @@
 
 void setup() {
     grbl_init();
+    _mc_task_init();
 }
 
 void loop() {
